@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 class LatexToPdf
   def self.config
-    @config||={:command => 'pdflatex', :arguments => ['-halt-on-error'], :parse_twice => false, :parse_runs => 1,
-               :overfull_vbox => true}
+    @config||={:command => 'pdflatex', :arguments => ['-halt-on-error'], :parse_twice => false, :parse_runs => 1}
   end
 
   # Converts a string of LaTeX +code+ into a binary string of PDF.
