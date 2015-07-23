@@ -18,7 +18,7 @@ class LatexToPdf
     parse_runs=[config[:parse_runs], (parse_twice ? 2 : config[:parse_runs])].max
     puts "Running Latex #{parse_runs} times..."
     dir=File.join(Rails.root, 'tmp', 'rails-latex', "#{Process.pid}-#{Thread.current.hash}")
-    input_filename=input.tex
+    input_filename='input.tex'
     input=File.join(dir, input_filename)
     FileUtils.mkdir_p(dir)
     # copy any additional supporting files (.cls, .sty, ...)
