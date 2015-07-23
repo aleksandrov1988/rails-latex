@@ -59,7 +59,7 @@ class LatexToPdf
 
             original_stdout, original_stderr = $stdout, $stderr
             $stderr = $stdout = File.open("input.log", "a")
-            args=config[:arguments] + %w[-shell-escape -interaction batchmode input.tex]
+            args=config[:arguments] + %w[-shell-escape -interaction batchmode]+[input_filename]
             (parse_runs-1).times do
               system config[:command], '-draftmode', *args
             end
@@ -74,7 +74,7 @@ class LatexToPdf
           end
         end)
     if File.exist?(pdf_file=input.sub(/\.tex$/, '.pdf'))
-      FileUtils.mv(input, File.join(dir, '..', 'input.tex'))
+      FileUtils.mv(input, File.join(dir, '..', input_filename))
       FileUtils.mv(input.sub(/\.tex$/, '.log'), File.join(dir, '..', 'input.log'))
       result=File.read(pdf_file)
       FileUtils.rm_rf(dir)
