@@ -1,6 +1,7 @@
 *.swp
 *.gem
 .bundle
+.idea
 Gemfile.lock
 pkg/*
 tmp
