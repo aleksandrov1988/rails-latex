@@ -31,8 +31,12 @@ class LatexToPdf
         fork do
           begin
             Dir.chdir dir
+            args=config[:arguments] + %w[-shell-escape -interaction batchmode]+[input_filename]
+            original_stdout, original_stderr = $stdout, $stderr
+            $stderr = $stdout = File.open("input.log", "a")
+
             if config[:overfull_vbox]
-              cmd="#{config[:command]} #{input_filename} | grep 'Overfull \\\\vbox'"
+              cmd="#{config[:command]} #{args.join(' ')} | grep 'Overfull \\\\vbox'"
               res=`#{cmd}`.split("\n")
               overfulls = []
               res.each do |line|
@@ -57,11 +61,9 @@ class LatexToPdf
               end
             end
 
-            original_stdout, original_stderr = $stdout, $stderr
-            $stderr = $stdout = File.open("input.log", "a")
-            args=config[:arguments] + %w[-shell-escape -interaction batchmode]+[input_filename]
+
             (parse_runs-1).times do
-              system config[:command], '-draftmode', *args
+              system config[:command], *args
             end
             exec config[:command], *args
           rescue
