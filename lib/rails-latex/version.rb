@@ -1,5 +1,5 @@
 module Rails
   module Latex
-    VERSION = "1.0.13.own2"
+    VERSION = "1.0.13.own3"
   end
 end

@@ -31,31 +31,98 @@ class LatexToPdf
         fork do
           begin
             Dir.chdir dir
+            FileUtils.cp input_filename, "input_orig.tex"
             args=config[:arguments] + %w[-shell-escape -interaction batchmode]+[input_filename]
             original_stdout, original_stderr = $stdout, $stderr
             $stderr = $stdout = File.open("input.log", "a")
 
             if config[:overfull_vbox]
-              cmd="#{config[:command]} #{args.join(' ')} | grep 'Overfull \\\\vbox'"
-              res=`#{cmd}`.split("\n")
-              overfulls = []
-              res.each do |line|
-                line =~ /\((.*?)pt.*?([0-9]+)\z/
-                overfulls << [$2.to_i - 1, $1.to_f.ceil]
-              end
-              buf = File.readlines(input_filename)
-              val=0
+              buf = File.read(input_filename)
               File.open(input_filename, 'w') do |f|
-                buf.each_with_index do |line, index|
-                  if overfulls.size > 0 && index == overfulls.first.first
-                    new_val=overfulls.shift.last
-                    val = new_val if new_val > val
+                f.puts buf.gsub(/\[0pt\]\{\\cell(.*?)(&|\\\\)/m) {
+                         t = $2
+                         "[0pt]{\\cell#{$1.gsub("\n", ' ')}#{t}"
+                       }
+              end
+
+              #cmd="#{config[:command]} #{args.join(' ')} | grep 'Overfull \\\\vbox'"
+              cmd="#{config[:command]} #{input_filename} | grep 'Overfull \\\\vbox'"
+              res=`#{cmd}`.split("\n")
+              if res.size > 0
+                overfulls = {}
+                res.each do |line|
+                  line =~ /\((.*?)pt.*?([0-9]+)\z/
+                  overfulls[$2.to_i - 1]={'overfull' => $1.to_f.ceil.to_f, 'n_lines' => 0, 'lines' => []}
+                end
+                expands={}
+
+                cur_mrowexpand = nil
+                (buf = File.readlines(input_filename)).each_with_index do |line, index|
+                  if line =~ /\\ccell/
+                    expands[index] = 0.0
+                    cur_mrowexpand = index
+                    overfulls.each do |key, val|
+                      if val['n_lines'] > val['lines'].size
+                        overfulls[key]['lines'] << index
+                      end
+                    end
+                  elsif line =~ /\\multirow\{([0-9]+)\}/
+                    next unless overfulls[index]
+                    overfulls[index]['n_lines'] = $1.to_i
+                    overfulls[index]['first_line'] = cur_mrowexpand
+                    overfulls[index]['lines'] << cur_mrowexpand
                   end
-                  if val > 0 && line =~ /\\\\/
-                    f.puts line.sub(/\\\\[^\[]/, "\\\\\\[#{val}pt]")
-                    val=0
-                  else
-                    f.puts line
+                end
+
+                m_overfull = overfulls.map { |key, val| val['overfull']/val['n_lines'] }.max
+                m_key, strut = nil, nil
+                while m_overfull > 0.0
+                  overfulls.each do |key, val|
+                    if val['n_lines'] > 0 && val['overfull']/val['n_lines'] == m_overfull
+                      m_key = key
+                      strut = m_overfull/2.0
+                      overfulls[key]['lines'].each do |line|
+                        expands[line] = strut.round(2)
+                      end
+                    end
+                  end
+
+                  overfulls.each do |key, val|
+                    if key != m_key
+                      count = (overfulls[key]['lines'] & overfulls[m_key]['lines']).size
+                      overfulls[key]['overfull'] -= strut * 2.0 * count
+                    else
+                      overfulls[key]['overfull'] = 0.0
+                    end
+                  end
+                  overfulls.each do |key, val|
+                    if key != m_key
+                      overfulls[key]['lines'] = overfulls[key]['lines'] - overfulls[m_key]['lines']
+                      overfulls[key]['n_lines'] = overfulls[key]['lines'].size
+                    end
+                  end
+                  overfulls[m_key]['n_lines'] = 0
+                  overfulls[m_key]['lines'] = []
+
+                  m_overfull = overfulls.map { |key, val| val['n_lines'] == 0 ? 0.0 : val['overfull']/val['n_lines'] }.max
+                end
+                adjusts = {}
+
+                overfulls.each do |key, val|
+                  adjusts[key] = expands[val['first_line']]
+                end
+
+
+                File.open(input_filename, 'w') do |f|
+                  buf.each_with_index do |line, index|
+                    if expands[index] && expands[index] > 0.0
+                      f.puts line.gsub(/(\{\\ccell\{.*?%first_cell)/, "\\mrowexpand{#{expands[index]}pt}"+'\1')
+                      #f.puts "\\mrowexpand{#{expands[index]}pt}#{line}"
+                    elsif adjusts[index]
+                      f.puts line.sub(/0pt/, "#{adjusts[index]}pt")
+                    else
+                      f.puts line
+                    end
                   end
                 end
               end
@@ -74,7 +141,9 @@ class LatexToPdf
             $stdout, $stderr = original_stdout, original_stderr
             Process.exit! 1
           end
-        end)
+        end
+
+    )
     if File.exist?(pdf_file=input.sub(/\.tex$/, '.pdf'))
       FileUtils.mv(input, File.join(dir, '..', input_filename))
       FileUtils.mv(input.sub(/\.tex$/, '.log'), File.join(dir, '..', 'input.log'))
@@ -124,4 +193,5 @@ class LatexToPdf
 
     @latex_escaper.latex_esc(text.to_s).html_safe
   end
+
 end
